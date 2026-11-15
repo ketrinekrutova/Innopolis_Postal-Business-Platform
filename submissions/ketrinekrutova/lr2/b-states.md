@@ -10,44 +10,53 @@
 
 ## 1. Диаграмма
 
+### Основной жизненный цикл
+
+Подписи на стрелках — кратко; полное условие каждого перехода — в таблице [п. 6](#6-событийные-уведомления--не-переходы) и [п. 5](#5-поведение-при-недоступности-смежного-сервиса). «24 ч» — исход внешней операции неизвестен 24 часа (допущение).
+
 ```mermaid
 stateDiagram-v2
-  [*] --> Verify: заявка зарегистрирована
-  Verify --> Rejected: нарушены правила или права
-  Verify --> HoldPending: проверки пройдены, цена получена
-  HoldPending --> Rejected: баланс подтвердил отказ, удержания нет
-  HoldPending --> CreatePending: баланс подтвердил удержание
-  HoldPending --> ManualReview: исход неизвестен 24 ч
-  CreatePending --> AwaitAccept: REST API подтвердил встречное РПО
-  CreatePending --> ReleasePending: подтверждено, что РПО не создано
-  CreatePending --> ManualReview: исход неизвестен 24 ч
-  AwaitAccept --> DebitPending: ТОЧКА НЕВОЗВРАТА — сеть подтвердила приём
-  AwaitAccept --> ReleasePending: подтверждены отмена, неприём или истечение срока
-  DebitPending --> Completed: списание и корректировка подтверждены
-  DebitPending --> ManualReview: расхождение не устранено 24 ч
-  ReleasePending --> Cancelled: удержание снято, причина — отмена
-  ReleasePending --> Expired: удержание снято, причина — срок
-  ReleasePending --> ManualReview: снятие не подтверждено 24 ч
-  ManualReview --> HoldPending: удержания нет, повтор с тем же ключом
-  ManualReview --> CreatePending: удержание есть, РПО не найдено
-  ManualReview --> AwaitAccept: найдено существующее РПО
-  ManualReview --> DebitPending: приём подтверждён, расчёт не завершён
-  ManualReview --> ReleasePending: удержание есть, РПО отменено или не принято
-  ManualReview --> Rejected: нет ни удержания, ни РПО
-  ManualReview --> Completed: приём и списание подтверждены
+  [*] --> Verify: создана
+  Verify --> Rejected: правила нарушены
+  Verify --> HoldPending: цена получена
+  HoldPending --> Rejected: отказ баланса
+  HoldPending --> CreatePending: удержано
+  CreatePending --> AwaitAccept: РПО создано
+  CreatePending --> ReleasePending: РПО не создано
+  AwaitAccept --> DebitPending: точка невозврата
+  AwaitAccept --> ReleasePending: отмена, неприём
+  DebitPending --> Completed: списано
+  ReleasePending --> Cancelled: снято, отмена
+  ReleasePending --> Expired: снято, срок
+  HoldPending --> ManualReview: 24 ч
+  CreatePending --> ManualReview: 24 ч
+  DebitPending --> ManualReview: 24 ч
+  ReleasePending --> ManualReview: 24 ч
   Rejected --> [*]
   Cancelled --> [*]
   Expired --> [*]
   Completed --> [*]
 
-  note right of HoldPending
-    ReturnProgressWorker
-    продвигает Verify, HoldPending, CreatePending
-  end note
-  note right of DebitPending
-    После точки невозврата
-    отмена запрещена, только урегулирование
-  end note
+  classDef pnr fill:#fde7c8,stroke:#d97706,stroke-width:2px,color:#111
+  class DebitPending pnr
+```
+
+Оранжевым выделено первое состояние после **точки невозврата** — подтверждённого почтовой сетью приёма встречного РПО ([п. 4](#4-точка-невозврата)).
+
+### Выход из ручного разбора
+
+Оператор выбирает только переход, подтверждённый найденным фактом.
+
+```mermaid
+stateDiagram-v2
+  direction LR
+  ManualReview --> HoldPending: нет удержания
+  ManualReview --> CreatePending: удержано, РПО нет
+  ManualReview --> AwaitAccept: РПО найдено
+  ManualReview --> DebitPending: приём подтверждён
+  ManualReview --> ReleasePending: РПО отменено
+  ManualReview --> Rejected: ни денег, ни РПО
+  ManualReview --> Completed: всё подтверждено
 ```
 
 ## 2. Состояния
